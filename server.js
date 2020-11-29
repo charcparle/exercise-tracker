@@ -183,12 +183,24 @@ async function showLog(url, res) {
     to = (url.to),
     limit = url.limit
 
-  if (url.from==null) {from = false}
-  if (url.to==null) {to = null}
+  if (url.from==null) {from = new Date(0)} else {from = new Date(url.from)}
+  if (url.to==null) {to = new Date(8640000000000000)} else {to = new Date(url.to)}
   console.log(`from, to: `)
   console.log(from, to);
-
-  let logging = await User.aggregate([
+  
+  let filtered = {
+    $filter: {
+      input:"$log",
+      cond:{
+        $or: [
+            //{$gte: ["date",new Date(url.from)]},
+            {$not: [from]}
+        ]
+      }
+    }
+  }
+  
+  let pipeline = [
     { $match: { "_id": userId } },
     { $unwind: "$activities" },
     { $sort: { "activities.date": -1 } },
@@ -196,6 +208,51 @@ async function showLog(url, res) {
       $group: {
         "_id": "$_id",
         "username": { "$first": "$username" },
+        "log": { "$push": "$activities" }
+      }
+    },
+    {
+      $project: {
+        "_id": 1,
+        "username": 1,
+        "log": {
+          "$slice": [filtered, {
+              "$cond": {
+                if: { $and: [limit] },
+                then: limit * 1,
+                else: { "$size": "$log" }
+              }
+          }]
+        }
+      }
+    },
+    { $unwind: "$log" },
+    {
+      $group: {
+        "_id": "$_id",
+        "username": { "$first": "$username" },
+        "count": { "$sum": 1 },
+        "log": { "$push": "$log" }
+      }
+    }
+  ]
+
+  let pipeline2 = [
+    { $match: { "_id": userId } },
+    { $unwind: "$activities" },
+    { $sort: { "activities.date": -1 } },
+    { $match: {
+        "activities.date": {
+          $gte: from,
+          $lte: to
+        }
+      }
+    },
+    {
+      $group: {
+        "_id": "$_id",
+        "username": { "$first": "$username" },
+        "count": { $sum: 1 },
         "log": { "$push": "$activities" }
       }
     },
@@ -223,8 +280,9 @@ async function showLog(url, res) {
         "log": { "$push": "$log" }
       }
     }
+  ]
 
-  ])
+  let logging = await User.aggregate(pipeline2)
     .then(console.log("inside showLog, pipeline ended"), err => console.log(err))
 
   console.log(`url.userId: ${url.userId}`)
