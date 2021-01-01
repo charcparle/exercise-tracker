@@ -1,8 +1,10 @@
+// https://exercise-tracker-fcc.charlescheng1.repl.co
 const express = require('express')
 const app = express()
 const bodyParser = require('body-parser')
 const cors = require('cors')
 const mongoose = require('mongoose')
+
 // Handle CORS
 app.use(cors({ optionsSuccessStatus: 204 }))
 
